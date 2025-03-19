@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"reflect"
+	"sync"
 	"time"
 )
 
@@ -39,9 +39,9 @@ import (
 */
 
 type Program struct {
-	Salary   bool `json:"salary"`
-	Military bool `json:"military"`
-	Base     bool `json:"base"`
+	Salary   bool `json:"salary,omitempty"`
+	Military bool `json:"military,omitempty"`
+	Base     bool `json:"base,omitempty"`
 }
 
 type Mortgage struct {
@@ -49,12 +49,6 @@ type Mortgage struct {
 	InitialPayment int     `json:"initial_payment"`
 	Months         int     `json:"months"`
 	Program        Program `json:"program"`
-}
-
-type Params struct {
-	ObjectCost     int `json:"object_cost"`
-	InitialPayment int `json:"initial_payment"`
-	Months         int `json:"months"`
 }
 
 type Aggregates struct {
@@ -66,42 +60,53 @@ type Aggregates struct {
 }
 
 type CreditData struct {
-	Params     Params     `json:"params"`
+	Params struct {
+		ObjectCost     int `json:"object_cost"`
+		InitialPayment int `json:"initial_payment"`
+		Months         int `json:"months"`
+	} `json:"params"`
 	Program    Program    `json:"program"`
 	Aggregates Aggregates `json:"aggregates"`
 }
 
-var ProgramCost = map[string]int{
-	"salary":   8,
-	"military": 9,
-	"base":     10,
+type CreditCache struct {
+	ID         int `json:"id"`
+	CreditData `json:",inline"`
 }
+
+var (
+	cache   []CreditCache
+	mtx     sync.RWMutex
+	cacheID int
+)
 
 func Calculate(m Mortgage) CreditData {
 	var result CreditData
-	result.Program = m.Program
-	result.Params = Params{
-		ObjectCost:     m.ObjectCost,
-		InitialPayment: m.InitialPayment,
-		Months:         m.Months,
-	}
+	result.Params.ObjectCost = m.ObjectCost
+	result.Params.InitialPayment = m.InitialPayment
+	result.Params.Months = m.Months
 
+	result.Program = m.Program
+
+	rate := 0
 	switch {
 	case m.Program.Salary:
-		result.Aggregates.Rate = 8
+		rate = 8
 	case m.Program.Military:
-		result.Aggregates.Rate = 9
+		rate = 9
 	case m.Program.Base:
-		result.Aggregates.Rate = 10
+		rate = 10
 	}
+	result.Aggregates.Rate = rate
 
 	result.Aggregates.LoanSum = m.ObjectCost - m.InitialPayment
 	ratePerMonth := float64(result.Aggregates.Rate) / 12 / 100
 	sum := float64(result.Aggregates.LoanSum)
 	payment := sum * (ratePerMonth * math.Pow(1+ratePerMonth, float64(m.Months))) / (math.Pow(1+ratePerMonth, float64(m.Months)) - 1)
+
 	result.Aggregates.MonthlyPayment = int(math.Ceil(payment))
 	result.Aggregates.Overpayment = result.Aggregates.MonthlyPayment*m.Months - result.Aggregates.LoanSum
-	result.Aggregates.LastPaymentDate = time.Now().AddDate(0, m.Months, 0).Format("02.01.2006")
+	result.Aggregates.LastPaymentDate = time.Now().AddDate(0, m.Months, 0).Format("2006-01-02")
 	return result
 }
 
@@ -126,11 +131,14 @@ func Execute(w http.ResponseWriter, r *http.Request) {
 
 	// проверка что выбрана одна программа
 	count := 0
-	v := reflect.ValueOf(mortgage.Program)
-	for i := 0; i < v.NumField(); i++ {
-		if v.Field(i).Bool() {
-			count++
-		}
+	if mortgage.Program.Salary {
+		count++
+	}
+	if mortgage.Program.Military {
+		count++
+	}
+	if mortgage.Program.Base {
+		count++
 	}
 	if count > 1 {
 		http.Error(w, "choose only 1 program", http.StatusBadRequest)
@@ -149,9 +157,15 @@ func Execute(w http.ResponseWriter, r *http.Request) {
 	percent := int(float64(mortgage.InitialPayment) / float64(mortgage.ObjectCost) * 100)
 	if percent < 20 {
 		http.Error(w, "the initial payment should be more", http.StatusBadRequest)
+		return
 	}
 
 	results := Calculate(mortgage)
+	mtx.Lock()
+	cache = append(cache, CreditCache{cacheID, results})
+	cacheID++
+	mtx.Unlock()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
@@ -159,8 +173,16 @@ func Execute(w http.ResponseWriter, r *http.Request) {
 func Cache(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-
+	mtx.RLock()
+	defer mtx.RUnlock()
+	if len(cache) == 0 {
+		http.Error(w, "empty cache", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cache)
 }
 
 func main() {

@@ -6,9 +6,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o mortgage-calc-service ./cmd
-
 RUN go mod vendor
+RUN go build -o mortgage-calc-service ./cmd
 
 FROM alpine:latest
 

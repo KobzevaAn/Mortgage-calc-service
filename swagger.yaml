@@ -1,0 +1,133 @@
+openapi: 3.0.0
+info:
+  title: Mortgage-Calc-Service API
+  version: 1.0.0
+  description: API для расчета параметров ипотеки
+paths:
+  /execute:
+    post:
+      summary: Рассчитать параметры ипотеки
+      description: Рассчитывает сумму кредита, процентную ставку и ежемесячный платеж
+      operationId: calculateMortgage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MortgageRequest"
+      responses:
+        "200":
+          description: Успешный расчет ипотеки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MortgageResponse"
+        "400":
+          description: Ошибка валидации запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /cache:
+    get:
+      summary: Получить кэшированные расчеты
+      description: Возвращает список ранее рассчитанных ипотек
+      operationId: getCachedMortgages
+      responses:
+        "200":
+          description: Список кэшированных расчетов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MortgageResponse"
+        "400":
+          description: Кэш пуст
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    MortgageRequest:
+      type: object
+      required:
+        - object_cost
+        - initial_payment
+        - months
+        - program
+      properties:
+        object_cost:
+          type: integer
+          description: Стоимость объекта недвижимости
+        initial_payment:
+          type: integer
+          description: Первоначальный взнос
+        months:
+          type: integer
+          description: Срок кредита в месяцах
+        program:
+          type: object
+          description: Блок с программами кредитования
+          properties:
+            salary:
+              type: boolean
+              description: Программа для корпоративных клиентов
+            military:
+              type: boolean
+              description: Военная ипотека
+            base:
+              type: boolean
+              description: Базовая программа
+
+    MortgageResponse:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            params:
+              type: object
+              description: Запрашиваемые параметры кредита
+              properties:
+                object_cost:
+                  type: integer
+                initial_payment:
+                  type: integer
+                months:
+                  type: integer
+            program:
+              type: object
+              description: Программа кредита
+              properties:
+                salary:
+                  type: boolean
+            aggregates:
+              type: object
+              description: Блок с агрегатами
+              properties:
+                rate:
+                  type: integer
+                  description: Годовая процентная ставка
+                loan_sum:
+                  type: integer
+                  description: Сумма кредита
+                monthly_payment:
+                  type: integer
+                  description: Аннуитетный ежемесячный платеж
+                overpayment:
+                  type: integer
+                  description: Переплата за весь срок кредита
+                last_payment_date:
+                  type: string
+                  format: date
+                  description: Последняя дата платежа
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

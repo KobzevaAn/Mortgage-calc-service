@@ -33,8 +33,10 @@ type CreditParams struct {
 }
 
 // CreditData рассчитанные данные кредита.
+//
+//nolint:govet // Отключаем govet, чтобы сохранить порядок JSON-полей
 type CreditData struct {
-	Aggregates Aggregates   `json:"aggregates"`
-	Program    Program      `json:"program"`
 	Params     CreditParams `json:"params"`
+	Program    Program      `json:"program"`
+	Aggregates Aggregates   `json:"aggregates"`
 }

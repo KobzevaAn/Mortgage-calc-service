@@ -7,9 +7,11 @@ import (
 )
 
 // CreditCache кэш для хранения расчета кредита.
+//
+//nolint:govet // Отключаем govet, чтобы сохранить порядок JSON-полей
 type CreditCache struct {
-	models.CreditData `json:",inline"`
 	ID                int `json:"id"`
+	models.CreditData `json:",inline"`
 }
 
 var (
@@ -22,7 +24,7 @@ var (
 func AddToCache(data models.CreditData) {
 	mtx.Lock()
 	defer mtx.Unlock()
-	cache = append(cache, CreditCache{data, cacheID})
+	cache = append(cache, CreditCache{cacheID, data})
 	cacheID++
 }
 
@@ -33,7 +35,7 @@ func GetCache() []CreditCache {
 	return cache
 }
 
-// ClearCache очищает кеш.
+// ClearCache очищает весь кеш.
 func ClearCache() {
 	mtx.Lock()
 	defer mtx.Unlock()

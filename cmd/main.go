@@ -2,7 +2,9 @@
 package main
 
 import (
+	"Mortgage-calc-service/internal/config"
 	"Mortgage-calc-service/internal/middleware"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -11,6 +13,12 @@ import (
 )
 
 func main() {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Ошибка загрузки конфигурации: %v", err)
+	}
+	addr := fmt.Sprintf(":%s", cfg.Port)
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/execute", handlers.Execute)
@@ -19,7 +27,7 @@ func main() {
 
 	log.Println("Server started")
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         addr,
 		Handler:      loggedMux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

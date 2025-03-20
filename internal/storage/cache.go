@@ -32,3 +32,11 @@ func GetCache() []CreditCache {
 	defer mtx.RUnlock()
 	return cache
 }
+
+// ClearCache очищает кеш.
+func ClearCache() {
+	mtx.Lock()
+	defer mtx.Unlock()
+	cache = nil
+	cacheID = 0
+}
